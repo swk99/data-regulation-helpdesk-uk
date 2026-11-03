@@ -23,7 +23,7 @@ class Question(BaseModel):
     live: bool = False
 
 
-def create_app(settings=None, *, local_origin=None, launch_ticket=None, ui_dir=None):
+def create_app(settings=None, *, local_origin=None, launch_ticket=None, ui_dir=None, pages_origin=None):
     s = settings or Settings()
     state = {}
 
@@ -99,7 +99,7 @@ def create_app(settings=None, *, local_origin=None, launch_ticket=None, ui_dir=N
 
     if local_origin:
         from .local_session import install_local_session
-        install_local_session(app, local_origin, launch_ticket, s.api_token, ui_dir)
+        install_local_session(app, local_origin, launch_ticket, s.api_token, ui_dir, pages_origin)
     return app
 
 

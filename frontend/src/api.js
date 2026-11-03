@@ -9,6 +9,7 @@ export async function request(base, token, path, body) {
   const response = await fetch(base + path, {
     method: body === undefined ? 'GET' : 'POST',
     credentials: 'same-origin',
+    ...(base.startsWith('http://127.0.0.1:') ? {targetAddressSpace:'loopback'} : {}),
     headers: {...(token ? {'Authorization': `Bearer ${token}`} : {}), ...(body === undefined ? {} : {'Content-Type': 'application/json'})},
     ...(body === undefined ? {} : {body: JSON.stringify(body)}),
     signal: AbortSignal.timeout(550000),

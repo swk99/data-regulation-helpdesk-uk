@@ -1,28 +1,35 @@
-# Run on your Windows PC — no backend URL or access token
+# Windows executable + GitHub Pages
 
-1. Install **Python 3.12** from <https://www.python.org/downloads/windows/> and **Ollama** from <https://ollama.com/download/windows> if they are not installed. Python 3.11 is also supported.
-2. [Download the project ZIP](https://github.com/swk99/data-regulation-helpdesk-uk/archive/refs/heads/main.zip), right-click it → **Extract All**. Put the extracted folder somewhere writable, such as `C:\Projects\fca-rag`.
-3. Open the extracted folder and double-click **Start Helpdesk.cmd**. Do not run it inside the ZIP viewer.
-4. Wait for setup. A local browser window opens automatically. Ask your question there. There are **no connection fields** to fill in.
+1. [Download RegulationHelpdesk.exe](https://github.com/swk99/data-regulation-helpdesk-uk/releases/latest/download/RegulationHelpdesk.exe).
+2. Open the executable and keep its console window open. **Python is bundled**; you do not need Python, Node.js, WSL or Docker. Ollama must already be installed: <https://ollama.com/download/windows>.
+3. The app opens <https://swk99.github.io/data-regulation-helpdesk-uk/> and pairs automatically. Allow **local device / local network access** if Chrome or Edge asks. No address, token or API key needs to be entered.
+4. Ask questions on GitHub Pages. Close the console or press Ctrl+C when finished. Close/reopen the executable to start a new session.
 
-Keep the launcher window open while using the app. Press Ctrl+C in that window to stop the research service. Ollama can stay running for other applications. You do not need Node.js, Docker, WSL, a hosted backend or a model API key.
+This is a Windows x64 executable built and tested by the repository's Windows CI. It is not code-signed. Releases include `SHA256SUMS.txt` so the download can be checked. A managed work PC may require IT approval; do not disable security controls. Model inference and the document index run on your PC, while the UI is hosted on GitHub Pages.
 
-First launch creates `.venv-desktop`, installs the pinned Python libraries and starts Ollama if necessary. It prefers an already-installed `qwen3.5:4b`, `qwen2.5:14b`, `llama3.1:8b`, `qwen2.5:7b` or `qwen2.5:3b`, in that order. If none is present, it downloads `qwen2.5:3b`. It also downloads `nomic-embed-text` if missing. Downloads may use several GB and take time. Later starts reuse installed packages and models. Set `CHAT_MODEL` or `EMBEDDING_MODEL` before launching to override the model choice.
+Existing supported Ollama models are reused, preferring `qwen3.5:4b` when installed. If none is present, the app downloads `qwen2.5:3b`. It downloads `nomic-embed-text` when missing. Model downloads may use several GB. The executable stores the index in `%LOCALAPPDATA%\UKRegulationHelpdesk\data`; replacing the executable does not discard it.
 
 Every chat request attempts a bounded live check of permitted official sources, using the PC's current date in Europe/London. Keep Windows date/time synchronisation enabled. Internet access is required for current documents and initial downloads; model inference and storage stay on the PC. Current legal applicability is only reported as supported when evidence supports it. FCA general publications remain permission-gated, and Handbook access limitations remain visible. This is not exhaustive web search.
 
 ## Troubleshooting
 
-- **404 at a github.io address:** GitHub Pages is a preview and download page. Use the local browser window opened by the launcher.
-- **Session expired / cannot connect:** close the launcher console, then run it again. Use the newly opened window. The port and session change on each launch; old bookmarks will not reconnect.
-- **Ollama failed:** open the Ollama desktop application and retry. Missing model downloads require internet access and enough disk space.
-- **Python missing:** install Python 3.12 with the Windows Python launcher. The launcher tries Python 3.12, then 3.11, then `python` on PATH.
-- **Package download failed:** check internet/proxy restrictions, then rerun; installation failures are displayed in the console. No admin privileges are required for this project environment.
-- **Slow first question:** the index begins empty. Discovery, document downloads, embedding and model loading take time. Research progress and unavailable sources are reported. A first run is not a pre-populated knowledge base.
-- **No supported summary:** the app returns references and uncertainty, never a pretend answer. If the model cannot load due to memory constraints, try a smaller installed model via `CHAT_MODEL`.
+- **No connection:** keep the executable running, check the browser's local device permission for `swk99.github.io`, then click Retry connection. Use the tab opened by the executable; a fresh unrelated tab has no session.
+- **Expired session:** close the console and reopen the executable. Pairing links are single-use and expire after five minutes.
+- **Ollama failed:** open the Ollama desktop app and retry. The console explains missing models, downloads or errors.
+- **Slow first question:** discovery, downloads, indexing and model loading take time. The corpus starts empty. Unsupported answers return references and uncertainty.
+- **Browser or organisation blocks loopback access:** use the all-local fallback by starting `RegulationHelpdesk.exe --local`. No browser protections need to be disabled.
+- **Duplicate app:** use the existing window or close it before opening another copy.
 
-## How automatic authentication works
+## Source-code alternative
 
-The launcher binds only to `127.0.0.1` on an available port. It generates a fresh session secret and opens a single-use launch link; the server exchanges it for an HttpOnly, SameSite=Strict browser cookie and redirects to the app. Secrets are not embedded in JavaScript or saved to the repository. Host and Origin checks reject cross-site requests. API access remains authenticated. No port forwarding or public tunnel is created. The local launch link is not written to access logs; do not share it.
+Download and extract the repository ZIP, then open `Start Helpdesk.cmd`. This route requires Python 3.11/3.12 and Ollama; it installs Python dependencies in `.venv-desktop` and opens GitHub Pages with the same automatic pairing flow. Developers rebuilding the UI run `npm run build --prefix frontend` and `python scripts/bundle_ui.py`.
 
-The bundled UI is `frontend/local-ui.zip`. Developers update it with `npm run build --prefix frontend` then `python scripts/bundle_ui.py`. CI checks its source fingerprint. Runtime files live in ignored `data/` and `.venv-desktop/` folders.
+## Automatic authentication
+
+The service listens only on IPv4 loopback on an OS-assigned port. A fresh, five-minute, single-use pairing secret is placed in the URL fragment (not sent to GitHub's HTTP server). The frontend immediately removes the fragment, POSTs the secret to the local service and keeps the resulting bearer session in this tab's sessionStorage so refresh works. It is not saved to localStorage, source code or server access logs. Sessions change on each restart. No public tunnel or port forwarding is created.
+
+Host and Origin checks restrict browser API access to the local app and the configured `https://swk99.github.io` origin. CORS cannot distinguish paths within that origin, so all applications on that personal Pages origin should be trusted. Other origins are rejected even if they send a token. Browser local-network permission still applies. The `--local` fallback uses a same-origin HttpOnly cookie instead.
+
+## Build and verification
+
+The Windows workflow packages the app with PyInstaller, executes `--self-test`, then publishes the EXE and SHA-256 checksum as a GitHub Release. Self-test checks startup, bundled source configuration, automatic authentication and persistent Chroma vector storage without calling Ollama or regulators. Full live model quality depends on the PC and installed model and is not established by that smoke test.

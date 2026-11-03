@@ -154,3 +154,44 @@ def test_desktop_serves_real_http_and_opens_authenticated_chat(tmp_path, monkeyp
     monkeypatch.setattr(module.webbrowser, 'open', browser)
     module.main()
     assert results == ['authenticated chat over real HTTP']
+
+
+def test_pages_pairing_cors_and_one_use_secret(tmp_path):
+    ui = tmp_path / 'ui'
+    ui.mkdir()
+    (ui / 'index.html').write_text('app')
+    key = secrets.token_urlsafe(32)
+    origin = 'https://swk99.github.io'
+    app = create_app(Settings(data_dir=tmp_path / 'data', api_token=secrets.token_urlsafe(32)),
+                     local_origin='http://127.0.0.1:8123', launch_ticket=key, ui_dir=ui, pages_origin=origin)
+    with TestClient(app, base_url='http://127.0.0.1:8123') as client:
+        headers = {'Origin': origin, 'Sec-Fetch-Site':'cross-site'}
+        preflight = client.options('/api/pair', headers={**headers,'Access-Control-Request-Method':'POST', 'Access-Control-Request-Headers':'content-type', 'Access-Control-Request-Private-Network':'true'})
+        assert preflight.status_code == 200
+        assert preflight.headers['access-control-allow-origin'] == origin
+        assert preflight.headers['access-control-allow-private-network'] == 'true'
+        assert client.post('/api/pair', json={'key':key}, headers={'Origin':'https://evil.example'}).status_code == 403
+        assert client.post('/api/pair', json={'key':key}).status_code == 403
+        paired = client.post('/api/pair', json={'key':key}, headers=headers)
+        assert paired.status_code == 200
+        assert paired.headers['cache-control'] == 'no-store'
+        token = paired.json()['token']
+        assert client.post('/api/pair', json={'key':key}, headers=headers).status_code == 401
+        assert client.get('/api/status', headers=headers).status_code == 401
+        assert client.get('/api/status', headers={**headers,'Authorization':'Bearer '+token}).status_code == 200
+        assert client.get('/api/status', headers={'Origin':'https://evil.example','Authorization':'Bearer '+token}).status_code == 403
+        assert client.get('/local/start?key='+key, headers=headers).status_code == 403
+
+
+def test_pairing_expires(tmp_path, monkeypatch):
+    import reghelp.local_session as session
+    ui = tmp_path / 'ui'
+    ui.mkdir()
+    (ui / 'index.html').write_text('app')
+    key = secrets.token_urlsafe(32)
+    app = create_app(Settings(data_dir=tmp_path / 'data', api_token=secrets.token_urlsafe(32)),
+                     local_origin='http://127.0.0.1:8123', launch_ticket=key, ui_dir=ui, pages_origin='https://swk99.github.io')
+    with TestClient(app, base_url='http://127.0.0.1:8123') as client:
+        old = session.time.monotonic()
+        monkeypatch.setattr(session.time,'monotonic',lambda:old+301)
+        assert client.post('/api/pair',json={'key':key},headers={'Origin':'https://swk99.github.io'}).status_code == 401

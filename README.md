@@ -8,16 +8,16 @@ Ask across FCA publications, the FCA Handbook, Bank of England publications, PRA
 
 ![Regulation Helpdesk interface](docs/screenshot.jpg)
 
-## Windows: open and ask
+## Windows: open the EXE, chat on GitHub Pages
 
-[Download ZIP](https://github.com/swk99/data-regulation-helpdesk-uk/archive/refs/heads/main.zip) → **Extract All** → double-click **Start Helpdesk.cmd**.
+[Download RegulationHelpdesk.exe](https://github.com/swk99/data-regulation-helpdesk-uk/releases/latest/download/RegulationHelpdesk.exe) → **open it** → use the **GitHub Pages tab it opens**.
 
-Requires Python 3.11/3.12 and Ollama installed once. First launch installs Python dependencies and missing models, then opens the local chat automatically. **No backend URL or access token to enter. No Node.js required.** Keep the launcher window open. GitHub Pages is the preview/download page; research runs in the local window. [Windows setup & troubleshooting](docs/local-windows.md).
+Python is bundled. Keep the app open and allow the browser's local device access prompt if shown. Ollama is required; installed models are reused and missing models download once. **No backend URL or token to enter.** [Windows setup & troubleshooting](docs/local-windows.md).
 
 ## Application status
 
 - Frontend: GitHub Pages deployment workflow included.
-- Backend: runs on your PC through **Start Helpdesk.cmd**, with automatic browser connection. No hosted backend is required.
+- Backend: runs on your PC through **RegulationHelpdesk.exe**, with automatic GitHub Pages connection. No hosted backend is required.
 - Corpus: not bundled or redistributed. It is built on the backend host from permitted public documents.
 - Live mode: bounded discovery and relevant-source revalidation, **not an exhaustive real-time search of every regulator page**.
 - FCA general publications: indexing is permission-gated under FCA legal terms 3.3; direct source links remain available.
@@ -33,12 +33,12 @@ Requires Python 3.11/3.12 and Ollama installed once. First launch installs Pytho
 - Rule/guidance markers and publication-type labels; no assumption that publication date equals effective date.
 - A bounded research agent: retrieve → optionally discover/recheck → retrieve again → summarize → validate citations.
 - Exact-quote and citation validation, plus references-only fallback. This does not prove semantic correctness; inspect source passages.
-- Authenticated backend APIs, origin-restricted CORS for hosted APIs, automatic HttpOnly session for desktop use, no question logging or chat persistence.
+- Authenticated backend APIs, origin-restricted CORS for hosted APIs, automatic per-tab bearer session for GitHub Pages and HttpOnly cookie for the local UI, no question logging or chat persistence.
 - Built-in six-hour update loop while the backend runs; CLI for external schedulers.
 
 ## Quick start for development
 
-The desktop launcher needs Python 3.11/3.12 and Ollama. Node.js 22+ is only needed when editing the frontend:
+The source-code launcher needs Python 3.11/3.12 and Ollama. The packaged EXE includes Python. Node.js 22+ is only needed when editing the frontend:
 
 ```bash
 npm ci --prefix frontend
@@ -47,7 +47,7 @@ python scripts/bundle_ui.py
 python run_local.py
 ```
 
-The launcher serves the bundled frontend and API from the same local origin with automatic authentication. To see frontend edits, rebuild the bundle and restart the launcher. `npm run dev --prefix frontend` is a visual preview only; it does not start an authenticated research service.
+The launcher opens GitHub Pages and pairs with the loopback API. The executable also supports `--local` for a same-origin frontend fallback. To see frontend edits, rebuild the bundle and restart the launcher. `npm run dev --prefix frontend` is a visual preview only; it does not start an authenticated research service.
 
 For advanced API-only hosting, see [docs/deployment.md](docs/deployment.md). Environment variables are read from the process; `.env` files are not automatically loaded.
 

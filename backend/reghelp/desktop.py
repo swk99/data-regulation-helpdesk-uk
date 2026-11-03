@@ -6,6 +6,7 @@ from pathlib import Path
 import secrets
 import shutil
 import socket
+import sys
 import subprocess
 import threading
 import time
@@ -13,7 +14,9 @@ import urllib.request
 import webbrowser
 import zipfile
 
-ROOT = Path(__file__).resolve().parents[2]
+BUNDLE = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[2]))
+ROOT = (Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'UKRegulationHelpdesk') if getattr(sys, 'frozen', False) else BUNDLE
+PAGES_URL = 'https://swk99.github.io/data-regulation-helpdesk-uk/'
 # Never route local model/session requests through an enterprise HTTP proxy.
 HTTP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -67,7 +70,7 @@ def prepare_ollama():
 
 
 def extract_ui():
-    archive = ROOT / 'frontend/local-ui.zip'
+    archive = (BUNDLE if getattr(sys, 'frozen', False) else ROOT) / 'frontend/local-ui.zip'
     if not archive.is_file():
         raise RuntimeError('Missing bundled UI. Download and extract the complete repository ZIP again.')
     import hashlib
@@ -112,26 +115,29 @@ def single_instance():
                 fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def main():
+def main(*, pages=False):
     import uvicorn
     from .api import create_app
     from .config import Settings
     ui_dir = extract_ui()
     url, chat, embedding = prepare_ollama()
     settings = Settings(data_dir=ROOT / 'data', ollama_url=url, chat_model=chat,
-                        embedding_model=embedding, api_token=secrets.token_urlsafe(32), origins=[])
+                        embedding_model=embedding, api_token=secrets.token_urlsafe(32), origins=[],
+                        source_file=BUNDLE / 'backend/sources.yaml')
     # Reserve an OS-assigned port before opening the browser (no fixed-port collision).
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(('127.0.0.1', 0))
         origin = f'http://127.0.0.1:{sock.getsockname()[1]}'
         ticket = secrets.token_urlsafe(32)
-        app = create_app(settings, local_origin=origin, launch_ticket=ticket, ui_dir=ui_dir)
+        app = create_app(settings, local_origin=origin, launch_ticket=ticket, ui_dir=ui_dir,
+                         pages_origin='https://swk99.github.io' if pages else None)
         server = uvicorn.Server(uvicorn.Config(app, host='127.0.0.1', access_log=False, proxy_headers=False))
         def open_when_ready():
             for _ in range(120):
                 if server.started:
                     print(f'\nHelpdesk ready: {origin}\nModel: {chat}\nKeep this window open. Press Ctrl+C to stop.', flush=True)
-                    if not webbrowser.open(origin + '/local/start?key=' + ticket):
+                    launch_url = (PAGES_URL + '#port=' + str(sock.getsockname()[1]) + '&ticket=' + ticket) if pages else (origin + '/local/start?key=' + ticket)
+                    if not webbrowser.open(launch_url):
                         print('Could not open your browser automatically. Set a default browser and restart.', flush=True)
                     return
                 time.sleep(.5)
@@ -142,7 +148,7 @@ def main():
 if __name__ == '__main__':
     try:
         with single_instance():
-            main()
+            main(pages=True)
     except KeyboardInterrupt:
         pass
     except Exception as error:
