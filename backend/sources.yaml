@@ -25,6 +25,12 @@ sources:
     name: PRA publications
     home: https://www.bankofengland.co.uk/prudential-regulation
     terms: https://www.bankofengland.co.uk/legal
+    targeted_seeds:
+      credit_union:
+        - url: https://www.bankofengland.co.uk/prudential-regulation/publication/2023/july/supervising-credit-unions
+          title: SS2/23 Supervising credit unions
+        - url: https://www.bankofengland.co.uk/prudential-regulation/publication/2026/february/credit-union-service-organisations-policy-statement
+          title: PS5/26 Credit Union Service Organisations
     seeds:
       - https://www.bankofengland.co.uk/rss/prudential-regulation-publications
       - https://www.bankofengland.co.uk/prudential-regulation/prudential-and-resolution-policy-index/banking

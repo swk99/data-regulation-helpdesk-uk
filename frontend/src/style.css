@@ -30,3 +30,7 @@ a.primary { display:inline-flex; align-items:center; justify-content:center; gap
 .first-install { margin-top:22px; padding-top:16px; border-top:1px solid #34495f; }
 .first-install summary { color:#a4b3c5; cursor:pointer; font-size:13px; }
 .modal { max-height:calc(100dvh - 48px); overflow-y:auto; }
+.query-understanding { padding:16px 20px; margin:16px 0; border:1px solid #34495f; border-radius:10px; background:#192430; color:#b8c4d5; font-size:13px; line-height:1.7; }
+.query-understanding strong { color:#c5ddf5; }
+.query-understanding p { margin:6px 0; }
+.query-understanding summary { cursor:pointer; color:#82aaff; }

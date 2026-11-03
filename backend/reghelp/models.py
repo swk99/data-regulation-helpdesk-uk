@@ -3,6 +3,12 @@ import hashlib
 import httpx
 
 
+class GenerationError(RuntimeError):
+    def __init__(self, code):
+        self.code = code
+        super().__init__(code)
+
+
 class Ollama:
     def __init__(self, settings):
         self.s = settings
@@ -30,14 +36,27 @@ No markdown, URLs or uncited introductions.'''
         from .clock import clock_context
         clock = as_of or clock_context()
         system += f"\nThe authoritative assessment date is {clock['as_of_date']} in Europe/London. Evaluate the current question as of this date. Never use your training cutoff or a user-supplied date as today's date. Distinguish future commencement dates, expired provisions and consultations from requirements effective today. If effective status is not established by evidence, explicitly state that current applicability is unverified. A successful fetch alone does not establish legal validity."
-        async with httpx.AsyncClient(timeout=300, trust_env=False) as client:
-            r = await client.post(self.s.ollama_url + '/api/chat', json={
-                'model': self.s.chat_model, 'stream': False, 'format': 'json',
-                **({'think': False} if self.s.chat_model.startswith(('qwen3', 'deepseek-r1')) else {}),
-                'options': {'temperature': 0, 'num_ctx': 8192},
-                'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': __import__('json').dumps({'question': question, 'evidence': evidence})}]})
-            r.raise_for_status()
-            return __import__('json').loads(r.json()['message']['content'])
+        try:
+            async with httpx.AsyncClient(timeout=300, trust_env=False) as client:
+                r = await client.post(self.s.ollama_url + '/api/chat', json={
+                    'model': self.s.chat_model, 'stream': False, 'format': 'json',
+                    **({'think': False} if self.s.chat_model.startswith(('qwen3', 'deepseek-r1')) else {}),
+                    'options': {'temperature': 0, 'num_ctx': 8192},
+                    'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': __import__('json').dumps({'question': question, 'evidence': evidence})}]})
+                if r.status_code >= 400:
+                    raise GenerationError(f'ollama_http_{r.status_code}')
+                try:
+                    payload=__import__('json').loads(r.json()['message']['content'])
+                except (ValueError, KeyError, TypeError):
+                    raise GenerationError('invalid_model_json')
+                if not isinstance(payload,dict) or not isinstance(payload.get('claims'),list):
+                    raise GenerationError('invalid_claim_schema')
+                return payload
+        except httpx.TimeoutException:
+            raise GenerationError('ollama_timeout')
+        except httpx.ConnectError:
+            raise GenerationError('ollama_unreachable')
+
 
 
 class Vectors:

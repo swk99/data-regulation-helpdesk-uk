@@ -5,7 +5,9 @@ import re
 from urllib.parse import urlsplit
 import yaml
 from .fetch import Fetcher
-from .parsing import parse, chunk, links_from
+from .query import plan_query, candidate_score
+from .storage import PARSER_VERSION
+from .parsing import parse, chunk, links_from, current_publication_links
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +24,8 @@ class Ingestor:
         if (urlsplit(url).hostname == 'www.fca.org.uk' or (policy and policy.get('requires_permission'))) and os.getenv('FCA_RETRIEVAL_PERMISSION', '').lower() != 'granted':
             raise ValueError('FCA publication indexing requires prior written permission under FCA legal terms 3.3')
         previous = self.store.active(url)
-        downloaded = await self.fetcher.get(url, (previous or {}).get('etag', ''), (previous or {}).get('modified', ''))
+        conditional = previous if previous and previous.get('parser_version') == PARSER_VERSION else {}
+        downloaded = await self.fetcher.get(url, (conditional or {}).get('etag', ''), (conditional or {}).get('modified', ''))
         if downloaded.not_modified:
             self.store.touch(url)
             version = previous['id']
@@ -68,7 +71,11 @@ class Ingestor:
                     trace.append(source['name'] + ': ' + detail)
                     continue
                 discovered, errors, indexed = 0, [], 0
-                pending = list(source['seeds'])
+                plan = plan_query(question)
+                targeted = source.get('targeted_seeds', {}).get(plan.institution, [])
+                pending = [item['url'] for item in targeted] + list(source['seeds'])
+                priority = []
+                self.store.add_candidates([(item['url'], item['title']) for item in targeted], source['id'])
                 seen = set()
                 # Small fair budget per source; sitemap indexes can be followed, not crawled without bounds.
                 while pending and len(seen) < 3:
@@ -82,8 +89,12 @@ class Ingestor:
                         links = links_from(d.body, d.url, xml)
                         if not links:
                             raise ValueError('No discoverable links; JavaScript/API adapter may be needed')
-                        document_links = []
+                        current = [] if xml else current_publication_links(d.body, d.url)
+                        priority.extend({'url':u,'title':t} for u,t in current)
+                        document_links = list(current)
                         for target, label in links[:5000]:
+                            if current and '.pdf' in target.lower():
+                                continue
                             if 'sitemap' in target.lower() and target not in seen:
                                 pending.append(target)
                             elif self.relevant(target):
@@ -91,13 +102,18 @@ class Ingestor:
                         self.store.add_candidates(document_links, source['id'])
                         discovered += len(document_links)
                         if question:
-                            words = set(re.findall(r'[a-z]{4,}', question.lower())) - {'what', 'does', 'which', 'should', 'with', 'from', 'have', 'about', 'before'}
-                            topics = [(u, t) for u, t in document_links if '/policy-index/' in u or '/prudential-and-resolution-policy-index/banking/' in u]
-                            topics.sort(key=lambda item: sum(w in (item[0]+' '+item[1]).lower() for w in words), reverse=True)
-                            pending.extend(u for u, t in topics[:2] if any(w in (u+' '+t).lower() for w in words))
+                            topics = [(u,t) for u,t in document_links if '/policy-index/' in u or '/prudential-and-resolution-policy-index/banking/' in u]
+                            topics.sort(key=lambda item: candidate_score(item[1],item[0],plan),reverse=True)
+                            pending.extend(u for u,t in topics[:2] if candidate_score(t,u,plan)>0)
                     except Exception as exc:
                         errors.append(str(exc)[:180])
-                for candidate in self.store.candidates(question, source['id'], per_source):
+                candidates = priority + self.store.candidates(question, source['id'], per_source)
+                chosen=[]
+                seen_urls=set()
+                for candidate in candidates:
+                    if candidate['url'] not in seen_urls:
+                        seen_urls.add(candidate['url']); chosen.append(candidate)
+                for candidate in chosen[:per_source]:
                     if remaining <= 0:
                         break
                     remaining -= 1

@@ -37,8 +37,44 @@ def links_from(body, base, xml=False):
     return list(result.items())
 
 
+def current_publication_links(body, base):
+    soup = BeautifulSoup(body, 'lxml')
+    heading = next((h for h in soup.find_all(['h2','h3']) if 'current version' in h.get_text(' ',strip=True).lower()),None)
+    if not heading:
+        return []
+    nodes=[]
+    for node in heading.next_siblings:
+        if getattr(node,'name',None) in ('h2','h3'):
+            break
+        nodes.append(str(node))
+    title = soup.find('h1') or soup.find('title')
+    name = title.get_text(' ',strip=True) if title else 'Current publication'
+    return [(url,name+' — current version — '+label) for url,label in links_from(''.join(nodes).encode(),base) if '.pdf' in url.lower()]
+
+
+def pdf_sections(reader):
+    sections=[]
+    for i,page in enumerate(reader.pages):
+        text=page.extract_text() or ''
+        matches=list(re.finditer(r'(?m)^\s*(\d{1,2}\.\d{1,2})\s+',text))
+        if matches:
+            if text[:matches[0].start()].strip():
+                sections.append({'section':f'PDF page {i+1} — heading','page':i+1,'text':text[:matches[0].start()]})
+            for j,match in enumerate(matches):
+                end=matches[j+1].start() if j+1<len(matches) else len(text)
+                sections.append({'section':f'Paragraph {match.group(1)} · PDF page {i+1}', 'page':i+1,'text':text[match.start():end]})
+        else:
+            label='Contents' if 'contents' in text[:250].lower() else 'PDF page'
+            sections.append({'section':f'{label} {i+1}','page':i+1,'text':text})
+    return sections
+
+
 def classify(title, url):
     context = (title + ' ' + url).lower()
+    if '/pra-rules/' in url:
+        return 'Rulebook text — applicability unverified'
+    if re.search(r'\bss\s*\d+[/_-]\d+', context) or 'supervising credit unions' in context or '/supervisory-statement' in context:
+        return 'Supervisory statement'
     for marker, kind in [('consultation', 'Consultation'), ('discussion-paper', 'Discussion paper'),
                          ('supervisory-statement', 'Supervisory statement'), ('supervisory statement', 'Supervisory statement'),
                          ('policy-statement', 'Policy statement'), ('policy statement', 'Policy statement'),
@@ -53,7 +89,7 @@ def parse(download):
         reader = PdfReader(io.BytesIO(download.body))
         if len(reader.pages) > 600:
             raise ValueError('PDF exceeds page budget')
-        sections = [{'section': f'PDF page {i+1}', 'page': i+1, 'text': p.extract_text() or ''} for i, p in enumerate(reader.pages)]
+        sections = pdf_sections(reader)
         title = str((reader.metadata or {}).get('/Title') or download.url.rsplit('/', 1)[-1])
         if sum(len(s['text'].strip()) for s in sections) < 100:
             raise ValueError('PDF has insufficient extractable text; OCR/manual review needed')

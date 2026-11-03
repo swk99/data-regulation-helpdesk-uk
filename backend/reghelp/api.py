@@ -53,7 +53,7 @@ def create_app(settings=None, *, local_origin=None, launch_ticket=None, ui_dir=N
                 await task
             await ingestor.fetcher.close()
 
-    app = FastAPI(title='UK Regulation Helpdesk', version='0.1.0', lifespan=lifespan)
+    app = FastAPI(title='UK Regulation Helpdesk', version='0.2.0', lifespan=lifespan)
     if not local_origin:
         app.add_middleware(CORSMiddleware, allow_origins=s.origins, allow_methods=['GET', 'POST'], allow_headers=['Authorization', 'Content-Type'])
 
@@ -88,11 +88,11 @@ def create_app(settings=None, *, local_origin=None, launch_ticket=None, ui_dir=N
 
     @app.get('/health')
     def health():
-        return {'status': 'ok', 'service': 'uk-regulation-helpdesk', 'version': '0.1.0'}
+        return {'status': 'ok', 'service': 'uk-regulation-helpdesk', 'version': '0.2.0'}
 
     @app.get('/api/status', dependencies=[Depends(auth)])
     def status():
-        return {**clock_context(), **state['store'].status(), 'catalog': state['ingestor'].sources, 'updating': state['ingestor'].lock.locked()}
+        return {'app_version':'0.2.0', 'capabilities':['query_planning','relevance_gates','korean_followup'], **clock_context(), **state['store'].status(), 'catalog': state['ingestor'].sources, 'updating': state['ingestor'].lock.locked()}
 
     @app.post('/api/chat', dependencies=[Depends(auth)])
     async def chat(body: Question):

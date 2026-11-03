@@ -1,4 +1,6 @@
 import re
+import logging
+from .query import plan_query
 from .retrieval import retrieve
 from .storage import now
 from .clock import clock_context, checked_since
@@ -72,7 +74,8 @@ class Agent:
                     'claims': [], 'sources': [], 'official_sources': [], 'warnings': [],
                     'trace': ['Greeting only. No regulatory documents were checked.'],
                     'answered_at': now(), 'live_requested': live}
-        trace = [f"Assessment date: {clock['as_of_date']} (Europe/London), read from the backend clock.", 'Searched the indexed official documents.']
+        plan = plan_query(question)
+        trace = [f"Assessment date: {clock['as_of_date']} (Europe/London), read from the backend clock.", 'Searched the indexed official documents.', f'Query plan: {plan.institution or "unspecified institution"}; {plan.jurisdiction}; {plan.intent}.', 'Retrieval concepts: '+plan.search_text]
         rows, warnings = await retrieve(question, self.store, self.models, self.vectors)
         if live:
             refresh = list(dict.fromkeys((r['url'], r['source']) for r in rows))
@@ -82,7 +85,7 @@ class Agent:
         evidence = [{'citation': f'S{i+1}', 'title': r['title'], 'url': r['url'], 'section': r['section'],
                      'page': r['page'], 'text': r['text'], 'kind': r['kind'], 'reference': r['reference'],
                      'published': r['published'], 'checked': r['checked'], 'version': r['hash'],
-                     'effective_date': None, 'legal_status': r.get('status', 'Not independently verified')} for i, r in enumerate(rows)]
+                     'relevance_score': r.get('relevance_score'), 'relevance_reason': r.get('relevance_reason'), 'effective_date': None, 'legal_status': r.get('status', 'Not independently verified')} for i, r in enumerate(rows)]
         fresh = bool(evidence) and live and all(checked_since(r['checked'], clock['server_time']) for r in evidence)
         freshness = 'sources_rechecked' if fresh else 'current_status_unverified'
         if not fresh:
@@ -92,8 +95,10 @@ class Agent:
             try:
                 claims = validated_claims(await self.models.generate(evidence, question, as_of=clock), evidence)
                 trace.append('Checked citation IDs, exact quotations and regulatory references.')
-            except Exception:
-                warnings.append('Answer model unavailable; showing retrieved source excerpts instead.')
+            except Exception as exc:
+                code = getattr(exc, 'code', type(exc).__name__)
+                logging.getLogger(__name__).warning('Answer generation failed: %s', code)
+                warnings.append(f'Answer generation failed ({code}); showing relevant excerpts only. Check Ollama and the PC app console.')
         mode = 'grounded_summary' if claims else 'references_only'
         if not claims:
             claims = [{'text': r['text'][:650], 'citation': r['citation'], 'quote': '', 'extract': True} for r in evidence[:3]]
@@ -105,5 +110,5 @@ class Agent:
         if live and not fresh:
             message = f"Current applicability as of {clock['as_of_date']} is unverified. Review the references below; I cannot confirm that these requirements apply today."
         return {**clock, 'freshness': freshness, 'mode': mode, 'message': message, 'claims': claims, 'sources': evidence,
-                'official_sources': [{'name': s['name'], 'url': s['home']} for s in self.ingestor.sources],
-                'warnings': list(dict.fromkeys(warnings)), 'trace': trace, 'answered_at': now(), 'live_requested': live}
+                'query_plan': plan.public(), 'official_sources': [{'name': s['name'], 'url': s['home']} for s in self.ingestor.sources],
+                'clarification': plan.clarification, 'warnings': list(dict.fromkeys(warnings)), 'trace': trace, 'answered_at': now(), 'live_requested': live}

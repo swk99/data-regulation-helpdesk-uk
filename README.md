@@ -34,6 +34,10 @@ Ask across FCA publications, the FCA Handbook, Bank of England publications, PRA
 
 Python is bundled. Keep the app open and allow the browser's local device access prompt if shown. Ollama is required; installed models are reused and missing models download once. **No backend URL or token to enter.** [Windows setup & troubleshooting](docs/local-windows.md).
 
+## Retrieval quality
+
+The PC app now shows how it interpreted the question, expands ownership terms, filters jurisdiction mismatches and unrelated administrative passages, and discovers the current SS2/23 PDF for credit-union questions. See [retrieval checks and validation limits](docs/retrieval-quality.md). Download the latest EXE to enable these backend changes; GitHub Pages shows an update prompt for older PC apps.
+
 ## Application status
 
 - Frontend: GitHub Pages deployment workflow included.

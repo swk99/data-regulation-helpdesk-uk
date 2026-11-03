@@ -6,6 +6,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+PARSER_VERSION = 2
+
+
 def now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -26,6 +29,8 @@ class Store:
             CREATE TABLE IF NOT EXISTS candidates(url TEXT PRIMARY KEY, title TEXT, source TEXT, discovered TEXT);
             CREATE TABLE IF NOT EXISTS source_status(source TEXT PRIMARY KEY, status TEXT, checked TEXT, detail TEXT);
             ''')
+            if 'parser_version' not in {row[1] for row in db.execute('PRAGMA table_info(versions)')}:
+                db.execute('ALTER TABLE versions ADD COLUMN parser_version INTEGER DEFAULT 0')
 
     def connect(self):
         db = sqlite3.connect(self.path / 'registry.sqlite3', timeout=30)
@@ -49,14 +54,18 @@ class Store:
             snapshot.write_bytes(download.body)
         stamp = now()
         with self.connect() as db:
-            existing = db.execute('SELECT id FROM versions WHERE id=?', (version,)).fetchone()
+            existing = db.execute('SELECT id,parser_version FROM versions WHERE id=?', (version,)).fetchone()
             if not existing:
                 db.execute('INSERT INTO versions(id,url,hash,title,source,published,kind,observed,checked,etag,modified) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                            (version, download.url, digest, doc.title, source, doc.published, doc.kind, stamp, stamp, download.etag, download.modified))
+            if not existing or existing['parser_version'] != PARSER_VERSION:
+                db.execute('DELETE FROM search WHERE id IN (SELECT id FROM chunks WHERE version=?)',(version,))
+                db.execute('DELETE FROM chunks WHERE version=?',(version,))
                 for i, c in enumerate(chunks):
                     cid = f'{version}:{i}'
                     db.execute('INSERT INTO chunks VALUES(?,?,?,?)', (cid, version, c['text'], json.dumps(c)))
                     db.execute('INSERT INTO search VALUES(?,?)', (cid, doc.title + '\n' + c['section'] + '\n' + c['text']))
+                db.execute("UPDATE versions SET parser_version=?,vector_model='' WHERE id=?",(PARSER_VERSION,version))
             db.execute('UPDATE versions SET active=0 WHERE url=?', (download.url,))
             db.execute('UPDATE versions SET active=1,checked=?,etag=?,modified=? WHERE id=?', (stamp, download.etag, download.modified, version))
         return version
@@ -81,7 +90,8 @@ class Store:
             return result
 
     def lexical(self, question, limit=40):
-        tokens = re.findall(r'[A-Za-z0-9]+', question)[:30]
+        from .query import plan_query
+        tokens = plan_query(question).terms
         if not tokens:
             return []
         expression = ' OR '.join('"' + word + '"' for word in tokens)
@@ -97,11 +107,12 @@ class Store:
     def candidates(self, question, source, limit):
         with self.connect() as db:
             rows = [dict(r) for r in db.execute("SELECT c.* FROM candidates c LEFT JOIN versions v ON c.url=v.url AND v.active=1 WHERE c.source=? ORDER BY COALESCE(v.checked, '') ASC, c.discovered DESC LIMIT 10000", (source,))]
-        words = set(re.findall(r'[a-z]{3,}', question.lower())) - {'what', 'which', 'does', 'about', 'must', 'should', 'the', 'and', 'for', 'are', 'with', 'from', 'that'}
+        from .query import plan_query, candidate_score
+        plan = plan_query(question)
         def score(row):
-            return sum(w in (row['title'] + ' ' + row['url']).lower() for w in words)
+            return candidate_score(row['title'], row['url'], plan)
         rows.sort(key=score, reverse=True)
-        return [r for r in rows if not words or score(r) > 0][:limit]
+        return [r for r in rows if not question or score(r) > 0][:limit]
 
     def mark(self, source, status, detail):
         with self.connect() as db:
