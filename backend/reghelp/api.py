@@ -12,6 +12,7 @@ from .storage import Store
 from .models import Ollama, Vectors
 from .ingestion import Ingestor
 from .agent import Agent
+from .clock import clock_context
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
 logging.getLogger('httpx').setLevel(logging.WARNING)
@@ -57,13 +58,18 @@ def create_app(settings=None):
         if not s.api_token or not secrets.compare_digest(authorization, 'Bearer ' + s.api_token):
             raise HTTPException(401, 'A valid backend access token is required')
 
+    @app.get('/api/time')
+    def current_time():
+        from fastapi.responses import JSONResponse
+        return JSONResponse(clock_context(), headers={'Cache-Control': 'no-store'})
+
     @app.get('/health')
     def health():
         return {'status': 'ok', 'service': 'uk-regulation-helpdesk', 'version': '0.1.0'}
 
     @app.get('/api/status', dependencies=[Depends(auth)])
     def status():
-        return {**state['store'].status(), 'catalog': state['ingestor'].sources, 'updating': state['ingestor'].lock.locked()}
+        return {**clock_context(), **state['store'].status(), 'catalog': state['ingestor'].sources, 'updating': state['ingestor'].lock.locked()}
 
     @app.post('/api/chat', dependencies=[Depends(auth)])
     async def chat(body: Question):
@@ -73,7 +79,7 @@ def create_app(settings=None):
             raise HTTPException(429, 'Another research request is running; please try again shortly')
         async with state['busy']:
             try:
-                return await asyncio.wait_for(state['agent'].answer(body.question, body.live), timeout=540)
+                return await asyncio.wait_for(state['agent'].answer(body.question, True), timeout=540)
             except TimeoutError:
                 raise HTTPException(504, 'Research timed out. Indexed evidence is retained; retry without live check.')
 

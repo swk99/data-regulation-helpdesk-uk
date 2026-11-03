@@ -7,3 +7,4 @@ pypdf==6.21.4
 chromadb==1.5.9
 protego==0.7.0
 PyYAML==6.0.3
+tzdata==2026.6

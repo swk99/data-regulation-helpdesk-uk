@@ -140,7 +140,7 @@ async def test_ingestion_to_answer_with_mocked_official_document(tmp_path):
     from reghelp.ingestion import Ingestor
     class Model:
         async def embed(self,texts,query=False): return [[1.,0.,0.] for _ in texts]
-        async def generate(self,evidence,question):
+        async def generate(self,evidence,question,as_of=None):
             return {'claims':[{'text':'The publication describes annual model review.', 'evidence_id':'S1',
                                'quote':'This publication describes annual model review.'}]}
     s=Settings(data_dir=tmp_path,request_delay=0)
@@ -163,3 +163,45 @@ async def test_ingestion_to_answer_with_mocked_official_document(tmp_path):
         assert answer['sources'][0]['kind']=='Guidance'
     finally:
         await ingestor.fetcher.close()
+
+
+def test_server_clock_and_freshness(tmp_path):
+    from reghelp.clock import checked_since
+    assert checked_since('2026-11-03T10:00:00+00:00','2026-11-03T09:00:00+00:00')
+    assert not checked_since('2026-11-02T10:00:00+00:00','2026-11-03T09:00:00+00:00')
+    assert not checked_since('2026-11-03T10:00:00','2026-11-03T09:00:00+00:00')
+    with TestClient(create_app(Settings(data_dir=tmp_path,api_token='a'*32))) as client:
+        r=client.get('/api/time')
+        assert r.headers['cache-control']=='no-store'
+        assert r.json()['timezone']=='Europe/London'
+        assert len(r.json()['as_of_date'])==10
+
+
+def test_web_chat_cannot_disable_today_check(tmp_path,monkeypatch):
+    calls=[]
+    async def answer(self,question,live=False):
+        calls.append(live)
+        return {'mode':'references_only'}
+    monkeypatch.setattr(Agent,'answer',answer)
+    with TestClient(create_app(Settings(data_dir=tmp_path,api_token='a'*32))) as client:
+        r=client.post('/api/chat',json={'question':'Does this apply today?','live':False},headers={'Authorization':'Bearer '+'a'*32})
+        assert r.status_code==200 and calls==[True]
+
+
+@pytest.mark.asyncio
+async def test_stale_evidence_cannot_become_a_current_summary(monkeypatch):
+    import reghelp.agent as module
+    row={'url':'https://www.bankofengland.co.uk/test','source':'boe','title':'Test', 'section':'Scope',
+         'page':0,'text':'This evidence was retrieved in the past.', 'kind':'Guidance','reference':'',
+         'published':'','checked':'2020-01-01T00:00:00+00:00','hash':'abc'}
+    async def search(*args):return [row],[]
+    monkeypatch.setattr(module,'retrieve',search)
+    class Ingest:
+        sources=[]
+        async def update(self,*args):return ['Source unavailable']
+    class Model:
+        async def generate(self,*args,**kwargs):raise AssertionError('Stale evidence must not generate a current summary')
+    response=await Agent(None,Model(),None,Ingest()).answer('Does this apply today?',True)
+    assert response['mode']=='references_only'
+    assert response['freshness']=='current_status_unverified'
+    assert response['as_of_date'] in response['message']

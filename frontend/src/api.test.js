@@ -11,3 +11,15 @@ test('API surfaces authentication failures',async()=>{
  globalThis.fetch=async()=>({ok:false,status:401,json:async()=>({detail:'Invalid token'})});
  try{await assert.rejects(request('https://api.example.com','bad','/api/status'),/Invalid token/);}finally{globalThis.fetch=original;}
 });
+
+import {formatToday} from './clock.js';
+test('UK date crosses midnight correctly during British Summer Time',()=>{
+ assert.equal(formatToday(new Date('2026-06-01T23:30:00Z')),'Tuesday, 2 June 2026');
+ assert.equal(formatToday(new Date('2026-11-03T23:30:00Z')),'Tuesday, 3 November 2026');
+});
+
+import {websiteClock} from './clock.js';
+test('website time accounts for CDN age and rejects missing headers',()=>{
+ assert.equal(websiteClock({ok:true,headers:new Headers({date:'Tue, 03 Nov 2026 12:00:00 GMT',age:'60'})}),Date.parse('2026-11-03T12:01:00Z'));
+ assert.throws(()=>websiteClock({ok:true,headers:new Headers()}));
+});
