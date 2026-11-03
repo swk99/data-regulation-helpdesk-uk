@@ -27,3 +27,6 @@ a.primary { display:inline-flex; align-items:center; justify-content:center; gap
 .setup-steps li { padding:4px 0; }
 .modal .primary { margin-top:12px; }
 @media(max-width:700px) { .launch-banner { flex-direction:column; align-items:stretch; margin:16px; padding:18px; gap:14px; } }
+.first-install { margin-top:22px; padding-top:16px; border-top:1px solid #34495f; }
+.first-install summary { color:#a4b3c5; cursor:pointer; font-size:13px; }
+.modal { max-height:calc(100dvh - 48px); overflow-y:auto; }

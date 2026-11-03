@@ -5,14 +5,14 @@ export function validateEndpoint(value) {
   if (url.username || url.password || url.search || url.hash) throw new Error('Enter a backend URL without credentials, query or fragment.');
   return url.href.replace(/\/$/, '');
 }
-export async function request(base, token, path, body) {
+export async function request(base, token, path, body, timeout=550000) {
   const response = await fetch(base + path, {
     method: body === undefined ? 'GET' : 'POST',
     credentials: 'same-origin',
     ...(base.startsWith('http://127.0.0.1:') ? {targetAddressSpace:'loopback'} : {}),
     headers: {...(token ? {'Authorization': `Bearer ${token}`} : {}), ...(body === undefined ? {} : {'Content-Type': 'application/json'})},
     ...(body === undefined ? {} : {body: JSON.stringify(body)}),
-    signal: AbortSignal.timeout(550000),
+    signal: AbortSignal.timeout(timeout),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));

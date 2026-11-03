@@ -1,8 +1,8 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ArrowUp, ArrowUpRight, BookOpen, Check, ChevronDown, Database, Globe2, History, Layers3, Link2, MessageSquare, Plus, Search, Settings2, ShieldCheck, Sparkles, X} from 'lucide-react';
 import {request} from './api';
-import {readConnection,saveConnection,pairConnection} from './connection';
+import {readConnection,saveConnection,pairConnection,createSessionBridge} from './connection';
 import './style.css';
 import {formatToday, websiteClock} from './clock';
 
@@ -23,22 +23,39 @@ const downloadUrl = 'https://github.com/swk99/data-regulation-helpdesk-uk/releas
 let initialConnection;
 try { initialConnection=readConnection(window.location,window.history,window.sessionStorage); } catch(e) { initialConnection={error:e.message}; }
 function App() {
- const [panel,setPanel]=useState('chat'), [settings,setSettings]=useState(false), [base]=useState(initialConnection.base||''), [token,setToken]=useState(initialConnection.token||'');
+ const [panel,setPanel]=useState('chat'), [settings,setSettings]=useState(false), [base,setBase]=useState(initialConnection.base||''), [token,setToken]=useState(initialConnection.token||'');
  const [connected,setConnected]=useState(false), [status,setStatus]=useState(null), [error,setError]=useState(initialConnection.error||''), [busy,setBusy]=useState(false), [connecting,setConnecting]=useState(Boolean(initialConnection.base));
+ const connectionRef=useRef({...initialConnection,ready:false}), bridgeRef=useRef(null), attemptRef=useRef(false);
  const [question,setQuestion]=useState(''), [messages,setMessages]=useState([]);
  const [clockNow,setClockNow]=useState(Date.now()), [clockOffset,setClockOffset]=useState(0), [serverClock,setServerClock]=useState(false);
  useEffect(()=>{const id=setInterval(()=>setClockNow(Date.now()),1000);return ()=>clearInterval(id)},[]);
  useEffect(()=>{let active=true;async function sync(){try{let ms,source='website';if(connected){try{const time=await request(base,token,'/api/time');ms=Date.parse(time.server_time);source='backend';}catch{ms=undefined;}}if(!Number.isFinite(ms)){const response=await fetch(new URL(import.meta.env.BASE_URL+'index.html',window.location.href),{method:'HEAD',cache:'no-store',signal:AbortSignal.timeout(10000)});ms=websiteClock(response);source='website';}if(active){setClockOffset(ms-Date.now());setServerClock(source);}}catch{if(active){setServerClock(false);setClockOffset(0);}}}sync();const id=setInterval(sync,60000);return ()=>{active=false;clearInterval(id)}},[connected,base,token]);
  async function autoConnect() {
-  if(!base)return;setConnecting(true);setError('');
+  if(attemptRef.current)return;attemptRef.current=true;setConnecting(true);setError('');
   try {
-   let sessionToken=token;
-   if(initialConnection.ticket){sessionToken=await pairConnection(base,initialConnection.ticket);initialConnection.ticket='';initialConnection.token=sessionToken;setToken(sessionToken);saveConnection(window.sessionStorage,base,sessionToken);}
-   const s=await request(base,sessionToken,'/api/status');setStatus(s);setConnected(true);
-  } catch(e) {setConnected(false);setError(e instanceof TypeError?'Cannot reach your PC app. Keep RegulationHelpdesk.exe open and allow this site to connect to your local device when the browser asks. Then retry.':e.message);}
-  finally {setConnecting(false);}
+   let candidate=connectionRef.current;
+   if(!candidate.base){
+    candidate=await bridgeRef.current?.request()||{};
+    if(!candidate.base)throw new Error('This tab has no connection yet. Use the GitHub tab opened by RegulationHelpdesk.exe. If it is closed, close the EXE window and reopen the EXE; no download is needed. Ollama running by itself is not enough.');
+    connectionRef.current=candidate;setBase(candidate.base);
+   }
+   if(candidate.ticket){
+    candidate.token=await pairConnection(candidate.base,candidate.ticket);delete candidate.ticket;
+    saveConnection(window.sessionStorage,candidate.base,candidate.token);
+   }
+   setToken(candidate.token||'');
+   const s=await request(candidate.base,candidate.token||'','/api/status',undefined,15000);
+   candidate.ready=true;saveConnection(window.sessionStorage,candidate.base,candidate.token||'');
+   setStatus(s);setConnected(true);setSettings(false);
+  } catch(e) {
+   connectionRef.current.ready=false;setConnected(false);
+   setError(e instanceof TypeError||e.name==='TimeoutError'?'This tab could not reach the PC app. Keep RegulationHelpdesk.exe open, check that its console says "Helpdesk ready", and allow local device access for this site in your browser. Then retry.':e.message);
+  } finally {attemptRef.current=false;setConnecting(false);}
  }
- useEffect(()=>{autoConnect();},[]);
+ useEffect(()=>{
+  bridgeRef.current=createSessionBridge(()=>connectionRef.current.ready?connectionRef.current:null);
+  autoConnect();return()=>bridgeRef.current?.close();
+ },[]);
 
  async function ask(e) {e?.preventDefault();if(!question.trim()||busy)return;if(!connected){setSettings(true);return;}const q=question.trim();setQuestion('');setError('');setBusy(true);setMessages(old=>[...old,{role:'user',text:q}]);try {const answer=await request(base,token,'/api/chat',{question:q,live:true});setMessages(old=>[...old,{role:'assistant',answer}]);setStatus(await request(base,token,'/api/status'));}catch(e){setMessages(old=>[...old,{role:'error',text:e.message}]);}finally{setBusy(false);}}
  async function refresh(){if(!connected){setSettings(true);return;}setBusy(true);setError('');try{await request(base,token,'/api/update',{});setStatus(await request(base,token,'/api/status'));}catch(e){setError(e.message);}finally{setBusy(false);}}
@@ -55,7 +72,8 @@ function App() {
    <header><div className="breadcrumb">Workspace <span>/</span> <strong>{panel==='chat'?'Research chat':panel==='sources'?'Source library':'Index activity'}</strong></div><button className={'connection '+(connected?'online':'')} onClick={()=>setSettings(true)}><span className={'dot '+(connected?'green':'')}/>{connected?'Local research ready':connecting?'Starting local session…':'Run on your PC'}<ArrowUpRight size={14}/></button></header>
    <div className="editor-tabs"><span className="editor-tab"><span className="file-symbol">{panel==='chat'?'PY':'MD'}</span>{panel==='chat'?'regulatory_research.py':panel==='sources'?'sources.md':'index_activity.log'}</span><span className="tab-note">UK regulation / research workspace</span></div>
    <main>
-    {!connected&&<section className="launch-banner" aria-label="Run on your computer"><div><strong>{base?'Your PC powers this chat':'GitHub Pages chat. Powered by your PC.'}</strong><p>{base?(connecting?'Connecting automatically… Allow local device access if your browser asks.':'Keep RegulationHelpdesk.exe open. Allow local device access in your browser, then retry.'):'Download RegulationHelpdesk.exe and open it. This GitHub Pages chat opens and connects automatically. No Python installation, backend URL or token entry.'}</p></div>{base?<button className="primary" disabled={connecting} onClick={autoConnect}>Retry connection</button>:<a className="primary" href={downloadUrl}>Download Windows .exe <ArrowUpRight size={16}/></a>}</section>}
+    {!connected&&<section className="launch-banner" aria-label="PC connection"><div><strong>{connecting?'Checking your PC connection…':'This browser tab is not connected yet'}</strong><p>{connecting?'Looking for a linked tab and checking the PC app.':'Already running? Use the tab opened by the EXE, or retry to connect through another linked tab in this browser. You do not need to download the app again.'}</p></div><button className="primary" disabled={connecting} onClick={autoConnect}>{connecting?'Checking…':'Retry connection'}</button></section>}
+
 
     {panel==='chat' && <>
      {!messages.length && <section className="welcome"><div className="eyebrow"><span/> UK REGULATORY INTELLIGENCE</div><h1>Clarity, backed by<br/><span>the source.</span></h1><p className="intro">Ask a regulatory question. Get a clear explanation,<br className="desktop"/> the supporting evidence, and what to check next.</p>
@@ -73,7 +91,7 @@ function App() {
    <div className="today-date"><strong>Today is {formatToday(new Date(clockNow+clockOffset))}</strong><span>Europe/London · {serverClock==='backend'?'Backend clock synced · refreshed every minute':serverClock==='website'?'Website server clock · refreshed every minute':'Device clock · server time not verified'}</span></div>
    <footer><span><span className="tiny-square"/> INDEPENDENT RESEARCH TOOL</span><a href="https://github.com/swk99/data-regulation-helpdesk-uk" target="_blank" rel="noreferrer">View source code <ArrowUpRight size={13}/></a></footer>
   </div>
-  {settings&&<div className="modal-backdrop" onClick={()=>setSettings(false)}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="connection-title" onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape')setSettings(false)}}><button className="close" onClick={()=>setSettings(false)} aria-label="Close settings"><X size={20}/></button><div className="modal-icon"><Link2 size={25}/></div><h2 id="connection-title">{connected?'Running on your PC':'Start your research workspace'}</h2>{connected?<p>Your PC app is connected automatically. Models and the document index run on this PC. Each question checks permitted official sources online.</p>:<><p>No backend address or token to enter. Run the app on your PC to search official publications and generate evidence-backed answers.</p><ol className="setup-steps"><li>Install Ollama once, if needed.</li><li>Download and open <strong>RegulationHelpdesk.exe</strong>. Keep its window open.</li><li>Use the GitHub Pages tab it opens. Allow local device access if the browser asks.</li></ol><p>Python is included in the executable. First launch downloads any missing Ollama models, which can take several minutes and use several GB. Later launches reuse them.</p><a className="primary" href={downloadUrl}>Download Windows .exe <ArrowUpRight size={16}/></a></>}{error&&<div className="error" role="alert">{error}</div>}<a className="setup-link" href="https://github.com/swk99/data-regulation-helpdesk-uk/blob/main/docs/local-windows.md" target="_blank" rel="noreferrer">Windows setup & troubleshooting ↗</a><p className="footnote">Chat here on GitHub Pages while the PC app runs. Model inference and indexed documents stay on your PC.</p></section></div>}
+  {settings&&<div className="modal-backdrop" onClick={()=>setSettings(false)}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="connection-title" onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape')setSettings(false)}}><button className="close" onClick={()=>setSettings(false)} aria-label="Close settings"><X size={20}/></button><div className="modal-icon"><Link2 size={25}/></div><h2 id="connection-title">{connected?'Running on your PC':connecting?'Checking connection…':'Connect the running app'}</h2>{connected?<p>Your PC app is connected. Models and the document index run on your PC.</p>:<><p>The app may already be running. This tab has not established a connection; this does not mean you need to reinstall it.</p><ol className="setup-steps"><li>Keep <strong>RegulationHelpdesk.exe</strong> open. Its console should say <strong>Helpdesk ready</strong>. Ollama alone does not start this app.</li><li>Use the GitHub tab the EXE opened. If another tab is connected in this browser, click Retry connection below.</li><li>If the browser blocked local device access, allow it for this site, then retry. If the original tab is closed, close the EXE window and reopen it.</li></ol>{error&&<div className="error" role="alert">{error}</div>}<button className="primary" disabled={connecting} onClick={autoConnect}>{connecting?'Checking…':'Retry connection'}</button><details className="first-install"><summary>First time here? Install the PC app</summary><p>Install Ollama once, then open RegulationHelpdesk.exe. Python is included. Missing models download on first use.</p><a className="primary" href={downloadUrl}>Download Windows .exe <ArrowUpRight size={16}/></a></details></>}<a className="setup-link" href="https://github.com/swk99/data-regulation-helpdesk-uk/blob/main/docs/local-windows.md" target="_blank" rel="noreferrer">Windows setup & troubleshooting ↗</a><p className="footnote">Chat here on GitHub Pages while the PC app runs. Model inference and indexed documents stay on your PC.</p></section></div>}
 
  </div>
 }
