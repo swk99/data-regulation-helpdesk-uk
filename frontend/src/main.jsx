@@ -57,7 +57,7 @@ function App() {
   autoConnect();return()=>bridgeRef.current?.close();
  },[]);
 
- async function ask(e) {e?.preventDefault();if(!question.trim()||busy)return;if(!connected){setSettings(true);return;}const q=question.trim();setQuestion('');setError('');setBusy(true);setMessages(old=>[...old,{role:'user',text:q}]);try {const answer=await request(base,token,'/api/chat',{question:q,live:true});setMessages(old=>[...old,{role:'assistant',answer}]);setStatus(await request(base,token,'/api/status'));}catch(e){setMessages(old=>[...old,{role:'error',text:e.message}]);}finally{setBusy(false);}}
+ async function ask(e) {e?.preventDefault();if(!question.trim()||busy)return;if(!connected){setSettings(true);return;}const q=question.trim();setQuestion('');setError('');setBusy(true);setMessages(old=>[...old,{role:'user',text:q}]);try {const answer=await request(base,token,'/api/chat',{question:q,live:true,previous_answer_id:[...messages].reverse().find(m=>m.role==='assistant')?.answer?.answer_id});setMessages(old=>[...old,{role:'assistant',answer}]);setStatus(await request(base,token,'/api/status'));}catch(e){setMessages(old=>[...old,{role:'error',text:e.message}]);}finally{setBusy(false);}}
  async function refresh(){if(!connected){setSettings(true);return;}setBusy(true);setError('');try{await request(base,token,'/api/update',{});setStatus(await request(base,token,'/api/status'));}catch(e){setError(e.message);}finally{setBusy(false);}}
  return <div className="app-shell">
   <aside className="sidebar">

@@ -12,7 +12,7 @@ from .config import Settings
 from .storage import Store
 from .models import Ollama, Vectors
 from .ingestion import Ingestor
-from .agent import Agent
+from .agent import Agent, is_korean_followup
 from .clock import clock_context
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
@@ -22,6 +22,7 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 class Question(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     live: bool = False
+    previous_answer_id: str | None = Field(default=None, max_length=64)
 
 
 def create_app(settings=None, *, local_origin=None, launch_ticket=None, ui_dir=None, pages_origin=None):
@@ -34,7 +35,7 @@ def create_app(settings=None, *, local_origin=None, launch_ticket=None, ui_dir=N
             raise RuntimeError('Set API_TOKEN to a random secret of at least 24 characters before starting the backend')
         store, models, vectors = Store(s.data_dir), Ollama(s), Vectors(s)
         ingestor = Ingestor(s, store, models, vectors)
-        state.update(store=store, ingestor=ingestor, agent=Agent(store, models, vectors, ingestor), busy=asyncio.Lock())
+        state.update(store=store, ingestor=ingestor, agent=Agent(store, models, vectors, ingestor), busy=asyncio.Lock(), answers={})
         async def scheduled():
             interval = max(3600, int(os.getenv('UPDATE_INTERVAL_SECONDS', '21600')))
             while True:
@@ -101,7 +102,19 @@ def create_app(settings=None, *, local_origin=None, launch_ticket=None, ui_dir=N
             raise HTTPException(429, 'Another research request is running; please try again shortly')
         async with state['busy']:
             try:
-                return await asyncio.wait_for(state['agent'].answer(body.question, True), timeout=540)
+                if is_korean_followup(body.question):
+                    previous = state['answers'].get(body.previous_answer_id)
+                    if not previous:
+                        raise HTTPException(409, '이전 답변을 찾을 수 없습니다. 앱 재시작 전의 대화라면 원래 질문을 다시 보내고 한국어 요약을 요청하세요.')
+                    answer = await asyncio.wait_for(state['agent'].korean_summary(previous, body.question), timeout=360)
+                else:
+                    answer = await asyncio.wait_for(state['agent'].answer(body.question, True), timeout=540)
+                    answer['research_question'] = body.question
+                answer['answer_id'] = secrets.token_urlsafe(24)
+                state['answers'][answer['answer_id']] = answer
+                while len(state['answers']) > 20:
+                    del state['answers'][next(iter(state['answers']))]
+                return answer
             except TimeoutError:
                 raise HTTPException(504, 'Research timed out. Indexed evidence is retained; try a narrower question.')
 

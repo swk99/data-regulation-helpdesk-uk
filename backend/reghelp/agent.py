@@ -27,9 +27,42 @@ def validated_claims(payload, evidence):
     return valid
 
 
+def is_korean_followup(question):
+    text = question.lower()
+    language = any(word in text for word in ('korean', '한국어', '한글'))
+    action = any(word in text for word in ('translat', 'summar', '번역', '요약'))
+    return language and action
+
+
 class Agent:
     def __init__(self, store, models, vectors, ingestor):
         self.store, self.models, self.vectors, self.ingestor = store, models, vectors, ingestor
+
+    async def korean_summary(self, previous, question):
+        import logging
+        result = {**previous, 'claims': [], 'mode': 'references_only',
+                  'trace': [*previous.get('trace', []), 'Korean follow-up: reused the previous answer evidence; no new search or source recheck.'],
+                  'warnings': list(previous.get('warnings', []))}
+        # The context is a server-held answer, never client-supplied source text.
+        evidence = previous.get('sources', [])
+        claims = []
+        if evidence:
+            try:
+                payload = await self.models.generate(evidence,
+                    '한국어로 이전 답변의 근거를 쉽게 요약하세요. 새로운 법적 결론을 추가하지 마세요. '
+                    '영문 원문의 정확한 인용 quote와 기존 evidence_id는 유지하세요. '
+                    '자료가 질문에 답하지 못하면 그 불확실성을 유지하세요. Previous research question: '
+                    + previous.get('research_question', '') + '\nFollow-up: ' + question,
+                    as_of={key: previous[key] for key in ('as_of_date', 'timezone', 'server_time')})
+                claims = validated_claims(payload, evidence)
+            except Exception as exc:
+                logging.getLogger(__name__).warning('Korean summary failed: %s', type(exc).__name__)
+        result['claims'] = claims
+        result['mode'] = 'grounded_summary' if claims else 'references_only'
+        result['message'] = ('이전 답변에 사용한 자료를 한국어로 요약했습니다. 원문 출처와 인용은 유지했으며, 새로운 자료 검색은 하지 않았습니다. 이전 답변에서 확인하지 못한 적용 여부는 여전히 미확인입니다.'
+            if claims else '이전 답변과 출처는 찾았지만, 한국어 요약을 생성하거나 검증하지 못했습니다. 로컬 Ollama 모델의 상태를 확인하세요. 관련 없는 자료를 새로 검색하지 않았습니다. 아래 출처는 이전 답변의 자료입니다.')
+        result['answered_at'] = now()
+        return result
 
     async def answer(self, question, live=False):
         clock = clock_context()

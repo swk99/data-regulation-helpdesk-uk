@@ -41,6 +41,9 @@ def self_test(folder):
             assert research.status_code==200,research.text
             assert research.json()['mode']=='references_only'
             assert research.json()['sources']==[]
+            followup=client.post('/api/chat',json={'question':'한국어로 번역하고 요약해줘','previous_answer_id':research.json()['answer_id']},headers=headers)
+            assert followup.status_code==200,followup.text
+            assert '한국어' in followup.json()['message']
         vectors = Vectors(settings)
         vectors.upsert([{'id':'smoke', 'url':'https://www.bankofengland.co.uk/', 'version':'test'}], [[1.,0.,0.]])
         assert 'smoke' in vectors.search([1.,0.,0.])

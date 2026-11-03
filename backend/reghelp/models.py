@@ -30,10 +30,11 @@ No markdown, URLs or uncited introductions.'''
         from .clock import clock_context
         clock = as_of or clock_context()
         system += f"\nThe authoritative assessment date is {clock['as_of_date']} in Europe/London. Evaluate the current question as of this date. Never use your training cutoff or a user-supplied date as today's date. Distinguish future commencement dates, expired provisions and consultations from requirements effective today. If effective status is not established by evidence, explicitly state that current applicability is unverified. A successful fetch alone does not establish legal validity."
-        async with httpx.AsyncClient(timeout=180) as client:
+        async with httpx.AsyncClient(timeout=300, trust_env=False) as client:
             r = await client.post(self.s.ollama_url + '/api/chat', json={
                 'model': self.s.chat_model, 'stream': False, 'format': 'json',
-                'options': {'temperature': 0, 'num_ctx': 16384},
+                **({'think': False} if self.s.chat_model.startswith(('qwen3', 'deepseek-r1')) else {}),
+                'options': {'temperature': 0, 'num_ctx': 8192},
                 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': __import__('json').dumps({'question': question, 'evidence': evidence})}]})
             r.raise_for_status()
             return __import__('json').loads(r.json()['message']['content'])
