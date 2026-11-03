@@ -1,5 +1,25 @@
 # UK Regulation Helpdesk
 
+**[Download Windows EXE](https://github.com/swk99/data-regulation-helpdesk-uk/releases/latest/download/RegulationHelpdesk.exe)** · **[Open GitHub Pages chat](https://swk99.github.io/data-regulation-helpdesk-uk/)** · [한국어 사용법](docs/usage-ko.md) · [English guide](docs/local-windows.md)
+
+Chat on GitHub Pages while **RegulationHelpdesk.exe** runs the research service and Ollama models on your Windows PC. Python is included in the EXE. You do not need to enter a backend URL, access token or model API key.
+
+## 사용 방법 — Windows
+
+1. **Ollama 설치 및 실행:** [Ollama for Windows](https://ollama.com/download/windows). 이미 설치했다면 그대로 사용하세요.
+2. **[최신 RegulationHelpdesk.exe 다운로드](https://github.com/swk99/data-regulation-helpdesk-uk/releases/latest/download/RegulationHelpdesk.exe)** 후 더블클릭하세요. 소스 코드 ZIP이나 Python을 따로 받을 필요는 없습니다.
+3. 실행 창에 **`Helpdesk ready`**가 표시될 때까지 기다리세요. 첫 실행에는 없는 모델을 내려받느라 시간이 걸릴 수 있습니다.
+4. **EXE가 자동으로 열어준 GitHub Pages 탭**을 사용하세요. 브라우저가 로컬 장치 접근을 물으면 허용하세요.
+5. `Hello.`로 연결을 확인한 뒤 규제 질문을 입력하세요. **사용 중에는 EXE 실행 창을 켜두세요.**
+
+예시 질문: `What are the PRA expectations for model risk management?`
+
+**업데이트:** 이전 EXE 실행 창을 닫고 최신 EXE를 실행한 뒤, 자동으로 열린 탭에서 `Ctrl + Shift + R`을 누르세요. 기존 문서 인덱스는 유지됩니다. 이전 버전에서 질문 전송 시 발생하던 SQL 오류는 `windows-4-1`에서 수정했습니다.
+
+**이미 실행 중인데 연결되지 않나요?** 자동으로 열린 탭에서 **Retry connection**을 누르세요. 원래 탭을 닫았다면 EXE 창을 닫았다가 다시 실행하세요. Ollama와 RegulationHelpdesk.exe가 모두 실행되어 있어야 합니다. [상세 사용법과 오류 해결](docs/usage-ko.md)
+
+[공개 릴리스 및 버전 기록](https://github.com/swk99/data-regulation-helpdesk-uk/releases) · [최신 EXE SHA-256 체크섬](https://github.com/swk99/data-regulation-helpdesk-uk/releases/latest/download/SHA256SUMS.txt)
+
 An evidence-led research chatbot for UK banking and data science. One repository contains a **Python/FastAPI backend** and a **React/JavaScript frontend** for GitHub Pages.
 
 Ask across FCA publications, the FCA Handbook, Bank of England publications, PRA publications and the PRA Rulebook. Answers include source titles, sections, URLs, retrieved passages and check timestamps. If a supported answer cannot be established, the interface shows references and uncertainty instead.

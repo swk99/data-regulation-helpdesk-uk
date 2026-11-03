@@ -1,5 +1,7 @@
 # Windows executable + GitHub Pages
 
+[한국어 사용법](usage-ko.md) · [All public releases](https://github.com/swk99/data-regulation-helpdesk-uk/releases)
+
 1. [Download RegulationHelpdesk.exe](https://github.com/swk99/data-regulation-helpdesk-uk/releases/latest/download/RegulationHelpdesk.exe).
 2. Open the executable and keep its console window open. **Python is bundled**; you do not need Python, Node.js, WSL or Docker. Ollama must already be installed: <https://ollama.com/download/windows>.
 3. The app opens <https://swk99.github.io/data-regulation-helpdesk-uk/> and pairs automatically. Allow **local device / local network access** if Chrome or Edge asks. No address, token or API key needs to be entered.
@@ -9,7 +11,7 @@ This is a Windows x64 executable built and tested by the repository's Windows CI
 
 Existing supported Ollama models are reused, preferring `qwen3.5:4b` when installed. If none is present, the app downloads `qwen2.5:3b`. It downloads `nomic-embed-text` when missing. Model downloads may use several GB. The executable stores the index in `%LOCALAPPDATA%\UKRegulationHelpdesk\data`; replacing the executable does not discard it.
 
-Every chat request attempts a bounded live check of permitted official sources, using the PC's current date in Europe/London. Keep Windows date/time synchronisation enabled. Internet access is required for current documents and initial downloads; model inference and storage stay on the PC. Current legal applicability is only reported as supported when evidence supports it. FCA general publications remain permission-gated, and Handbook access limitations remain visible. This is not exhaustive web search.
+Every regulatory research request attempts a bounded live check of permitted official sources, using the PC's current date in Europe/London. Keep Windows date/time synchronisation enabled. Internet access is required for current documents and initial downloads; model inference and storage stay on the PC. Current legal applicability is only reported as supported when evidence supports it. FCA general publications remain permission-gated, and Handbook access limitations remain visible. This is not exhaustive web search.
 
 ## Fix for “Failed to fetch” when sending a question
 
@@ -39,4 +41,4 @@ Host and Origin checks restrict browser API access to the local app and the conf
 
 ## Build and verification
 
-The Windows workflow packages the app with PyInstaller, executes `--self-test`, then publishes the EXE and SHA-256 checksum as a GitHub Release. Self-test checks startup, bundled source configuration, automatic authentication and persistent Chroma vector storage without calling Ollama or regulators. Full live model quality depends on the PC and installed model and is not established by that smoke test.
+The Windows workflow packages the app with PyInstaller, executes `--self-test`, then publishes the EXE and SHA-256 checksum as a GitHub Release. Self-test checks startup, bundled source configuration, automatic authentication, greeting responses, the full research path with external services simulated as unavailable, and persistent Chroma vector storage. It does not call live Ollama models or regulators. Full live model quality depends on the PC and installed model and is not established by that smoke test.
