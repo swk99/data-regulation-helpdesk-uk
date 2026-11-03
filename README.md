@@ -4,6 +4,10 @@ An evidence-led research chatbot for UK banking and data science. One repository
 
 Ask across FCA publications, the FCA Handbook, Bank of England publications, PRA publications and the PRA Rulebook. Answers include source titles, sections, URLs, retrieved passages and check timestamps. If a supported answer cannot be established, the interface shows references and uncertainty instead.
 
+[Open the website](https://swk99.github.io/data-regulation-helpdesk-uk/) · [Validation record](docs/validation.md)
+
+![Regulation Helpdesk interface](docs/screenshot.jpg)
+
 ## Application status
 
 - Frontend: GitHub Pages deployment workflow included.
