@@ -1,0 +1,37 @@
+# Sources are fetched only if current robots.txt permits access.
+# Entries are discovery roots, not claims of complete corpus coverage.
+sources:
+  - id: fca
+    requires_permission: true
+    name: FCA publications
+    home: https://www.fca.org.uk/
+    terms: https://www.fca.org.uk/legal
+    seeds:
+      - https://www.fca.org.uk/publications
+      - https://www.fca.org.uk/sitemap-main.xml
+  - id: handbook
+    name: FCA Handbook
+    home: https://handbook.fca.org.uk/
+    terms: https://handbook.fca.org.uk/footer-widget/terms-and-conditions
+    seeds:
+      - https://handbook.fca.org.uk/
+  - id: boe
+    name: Bank of England
+    home: https://www.bankofengland.co.uk/
+    terms: https://www.bankofengland.co.uk/legal
+    seeds:
+      - https://www.bankofengland.co.uk/rss/publications
+  - id: pra
+    name: PRA publications
+    home: https://www.bankofengland.co.uk/prudential-regulation
+    terms: https://www.bankofengland.co.uk/legal
+    seeds:
+      - https://www.bankofengland.co.uk/rss/prudential-regulation-publications
+      - https://www.bankofengland.co.uk/prudential-regulation/prudential-and-resolution-policy-index/banking
+  - id: rulebook
+    name: PRA Rulebook
+    home: https://www.prarulebook.co.uk/
+    terms: https://www.prarulebook.co.uk/legal
+    seeds:
+      - https://www.prarulebook.co.uk/pra-rules/crr-firms
+      - https://www.prarulebook.co.uk/pra-rules/non-crr-firms
