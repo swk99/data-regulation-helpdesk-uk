@@ -8,12 +8,14 @@ export function validateEndpoint(value) {
 export async function request(base, token, path, body) {
   const response = await fetch(base + path, {
     method: body === undefined ? 'GET' : 'POST',
-    headers: {'Authorization': `Bearer ${token}`, ...(body === undefined ? {} : {'Content-Type': 'application/json'})},
+    credentials: 'same-origin',
+    headers: {...(token ? {'Authorization': `Bearer ${token}`} : {}), ...(body === undefined ? {} : {'Content-Type': 'application/json'})},
     ...(body === undefined ? {} : {body: JSON.stringify(body)}),
     signal: AbortSignal.timeout(550000),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
+    if (response.status === 404) throw new Error('Research service not found. Open the app using Start Helpdesk.cmd, not a GitHub Pages address.');
     throw new Error(typeof data.detail === 'string' ? data.detail : `Backend returned ${response.status}`);
   }
   return response.json();

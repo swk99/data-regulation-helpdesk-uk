@@ -9,3 +9,5 @@ data/
 logs/
 node_modules/
 dist/
+
+.venv-desktop/

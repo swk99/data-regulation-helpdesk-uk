@@ -1,3 +1,7 @@
+# Recommended: local desktop
+
+Use [Start Helpdesk.cmd](local-windows.md) for automatic connection without a URL or token. The instructions below are for advanced standalone server deployments.
+
 # Deployment
 
 ## GitHub Pages frontend
@@ -17,8 +21,8 @@ Use an always-on host with Python 3.11+, persistent disk, and Ollama reachable o
 3. Pull the selected embedding/chat models on the Ollama host. Do not expose Ollama's unauthenticated port publicly.
 4. Mount persistent storage at `DATA_DIR`. Back up SQLite, snapshots and ChromaDB together while writes are stopped.
 5. Run `uvicorn reghelp.api:app --host 0.0.0.0 --port 8000 --workers 1` behind an HTTPS reverse proxy. Allow long-running requests (up to nine minutes) and enforce connection/request limits at that proxy.
-6. Open Pages, select Backend connection and enter the HTTPS origin plus the token. The token is kept in tab memory; it is not stored in localStorage or committed to the repository.
-7. Run a first update and inspect per-source status. Source unavailability and pending embeddings are visible in Index activity.
+6. Use an API client with `Authorization: Bearer <API_TOKEN>`. The shipped frontend now uses the desktop launcher; GitHub Pages does not offer manual remote connection fields.
+7. POST `/api/update`, then GET `/api/status` to inspect per-source availability.
 
 Example Docker build:
 
@@ -33,14 +37,14 @@ The static frontend is public. Its authenticated backend is intended for one use
 
 ## Updates
 
-The backend runs a six-hour update timer after startup; the first update is manual. Set `UPDATE_INTERVAL_SECONDS` (minimum one hour) to change it. Restarting the backend restarts the timer. No updates run while the backend is stopped. Windows Task Scheduler or a host scheduler can instead invoke `python -m reghelp.cli update` while the server is stopped. Do not use GitHub Actions to publish the downloaded corpus.
+The backend runs a six-hour update timer after startup; the first update is triggered by a chat request or a manual update. Set `UPDATE_INTERVAL_SECONDS` (minimum one hour) to change it. Restarting the backend restarts the timer. No updates run while the backend is stopped. Windows Task Scheduler or a host scheduler can instead invoke `python -m reghelp.cli update` while the server is stopped. Do not use GitHub Actions to publish the downloaded corpus.
 
 ## Troubleshooting
 
-- **Backend not connected**: no server URL/token has been configured; the site does not fabricate demo answers.
-- **401**: wrong token. Restarting the browser clears the in-memory token.
+- **Local desktop connection**: see [the Windows guide](local-windows.md).
+- **401 (standalone API)**: missing or incorrect Bearer token.
 - **CORS**: permit `https://swk99.github.io`, without a path, on the backend.
 - **Keyword-only**: Ollama/embedding model is unavailable. Start/pull the configured model and update again.
 - **References only**: insufficient evidence or no validated model output. Read sources directly.
 - **Source unavailable**: review robots, HTTP errors and JavaScript/API requirements in Index activity.
-- **502/504**: ensure the proxy permits long requests; use indexed mode while sources are slow.
+- **502/504**: ensure the proxy permits long requests; retry with a narrower question.

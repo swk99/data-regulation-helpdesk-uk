@@ -4,7 +4,7 @@ import logging
 import os
 import secrets
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, Header, HTTPException
+from fastapi import FastAPI, Depends, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from .config import Settings
@@ -23,7 +23,7 @@ class Question(BaseModel):
     live: bool = False
 
 
-def create_app(settings=None):
+def create_app(settings=None, *, local_origin=None, launch_ticket=None, ui_dir=None):
     s = settings or Settings()
     state = {}
 
@@ -52,9 +52,15 @@ def create_app(settings=None):
             await ingestor.fetcher.close()
 
     app = FastAPI(title='UK Regulation Helpdesk', version='0.1.0', lifespan=lifespan)
-    app.add_middleware(CORSMiddleware, allow_origins=s.origins, allow_methods=['GET', 'POST'], allow_headers=['Authorization', 'Content-Type'])
+    if not local_origin:
+        app.add_middleware(CORSMiddleware, allow_origins=s.origins, allow_methods=['GET', 'POST'], allow_headers=['Authorization', 'Content-Type'])
 
-    async def auth(authorization: str = Header(default='')):
+    async def auth(request: Request, authorization: str = Header(default='')):
+        if local_origin:
+            from .local_session import COOKIE
+            cookie = request.cookies.get(COOKIE, '')
+            if s.api_token and secrets.compare_digest(cookie, s.api_token):
+                return
         if not s.api_token or not secrets.compare_digest(authorization, 'Bearer ' + s.api_token):
             raise HTTPException(401, 'A valid backend access token is required')
 
@@ -81,7 +87,7 @@ def create_app(settings=None):
             try:
                 return await asyncio.wait_for(state['agent'].answer(body.question, True), timeout=540)
             except TimeoutError:
-                raise HTTPException(504, 'Research timed out. Indexed evidence is retained; retry without live check.')
+                raise HTTPException(504, 'Research timed out. Indexed evidence is retained; try a narrower question.')
 
     @app.post('/api/update', dependencies=[Depends(auth)])
     async def update():
@@ -91,6 +97,9 @@ def create_app(settings=None):
     def versions(url: str):
         return {'versions': state['store'].history(url)}
 
+    if local_origin:
+        from .local_session import install_local_session
+        install_local_session(app, local_origin, launch_ticket, s.api_token, ui_dir)
     return app
 
 

@@ -8,10 +8,16 @@ Ask across FCA publications, the FCA Handbook, Bank of England publications, PRA
 
 ![Regulation Helpdesk interface](docs/screenshot.jpg)
 
+## Windows: open and ask
+
+[Download ZIP](https://github.com/swk99/data-regulation-helpdesk-uk/archive/refs/heads/main.zip) → **Extract All** → double-click **Start Helpdesk.cmd**.
+
+Requires Python 3.11/3.12 and Ollama installed once. First launch installs Python dependencies and missing models, then opens the local chat automatically. **No backend URL or access token to enter. No Node.js required.** Keep the launcher window open. GitHub Pages is the preview/download page; research runs in the local window. [Windows setup & troubleshooting](docs/local-windows.md).
+
 ## Application status
 
 - Frontend: GitHub Pages deployment workflow included.
-- Backend: implemented, **not deployed**. Connect its HTTPS URL and access token in the website.
+- Backend: runs on your PC through **Start Helpdesk.cmd**, with automatic browser connection. No hosted backend is required.
 - Corpus: not bundled or redistributed. It is built on the backend host from permitted public documents.
 - Live mode: bounded discovery and relevant-source revalidation, **not an exhaustive real-time search of every regulator page**.
 - FCA general publications: indexing is permission-gated under FCA legal terms 3.3; direct source links remain available.
@@ -27,43 +33,23 @@ Ask across FCA publications, the FCA Handbook, Bank of England publications, PRA
 - Rule/guidance markers and publication-type labels; no assumption that publication date equals effective date.
 - A bounded research agent: retrieve → optionally discover/recheck → retrieve again → summarize → validate citations.
 - Exact-quote and citation validation, plus references-only fallback. This does not prove semantic correctness; inspect source passages.
-- Authenticated backend APIs, origin-restricted CORS, in-memory browser token, no question logging or chat persistence.
+- Authenticated backend APIs, origin-restricted CORS for hosted APIs, automatic HttpOnly session for desktop use, no question logging or chat persistence.
 - Built-in six-hour update loop while the backend runs; CLI for external schedulers.
 
 ## Quick start for development
 
-Python 3.11+ and Node.js 22+ are required. Production hosting instructions are in [docs/deployment.md](docs/deployment.md). These commands are for developers; visitors to GitHub Pages do not need Python.
+The desktop launcher needs Python 3.11/3.12 and Ollama. Node.js 22+ is only needed when editing the frontend:
 
 ```bash
-python -m venv .venv
-# Activate .venv for your platform
-pip install -r backend/requirements-dev.txt
-cd backend
-# Set API_TOKEN, OLLAMA_URL and other environment variables (see .env.example).
-ollama pull nomic-embed-text
-ollama pull qwen2.5:14b
-uvicorn reghelp.api:app --host 127.0.0.1 --port 8000 --workers 1
+npm ci --prefix frontend
+npm run build --prefix frontend
+python scripts/bundle_ui.py
+python run_local.py
 ```
 
-In a second terminal:
+The launcher serves the bundled frontend and API from the same local origin with automatic authentication. To see frontend edits, rebuild the bundle and restart the launcher. `npm run dev --prefix frontend` is a visual preview only; it does not start an authenticated research service.
 
-```bash
-cd frontend
-npm ci
-npm run dev
-```
-
-Open the frontend, choose **Backend connection**, and enter the backend URL and API_TOKEN. Select **Index activity → Check for updates**, or ask a question with **Live source check** enabled.
-
-For PowerShell environment setup:
-
-```powershell
-$env:API_TOKEN = python -c "import secrets; print(secrets.token_urlsafe(32))"
-$env:OLLAMA_URL = 'http://127.0.0.1:11434'
-# Display the token only in your own terminal when you need to enter it in the frontend.
-```
-
-The application reads process environment variables; it does not automatically load `.env` files.
+For advanced API-only hosting, see [docs/deployment.md](docs/deployment.md). Environment variables are read from the process; `.env` files are not automatically loaded.
 
 ## CLI
 
