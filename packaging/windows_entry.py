@@ -26,6 +26,21 @@ def self_test(folder):
         assert pair.status_code == 200, pair.text
         assert client.get('/api/status', headers={'Authorization':'Bearer '+pair.json()['token'], 'Origin':'https://swk99.github.io'}).status_code == 200
         assert client.get('/').status_code == 200
+        headers={'Authorization':'Bearer '+pair.json()['token'], 'Origin':'https://swk99.github.io'}
+        hello=client.post('/api/chat',json={'question':'Hello.'},headers=headers)
+        assert hello.status_code==200 and hello.json()['mode']=='welcome',hello.text
+        # Exercise the entire empty-index discovery/SQL/retrieval path in the
+        # packaged binary, with only external I/O replaced by an outage fixture.
+        from unittest.mock import patch
+        from reghelp.fetch import Fetcher
+        from reghelp.models import Ollama
+        async def unavailable(*args,**kwargs):
+            raise RuntimeError('Offline packaging test')
+        with patch.object(Fetcher,'get',unavailable), patch.object(Ollama,'embed',unavailable):
+            research=client.post('/api/chat',json={'question':'PRA model risk management'},headers=headers)
+            assert research.status_code==200,research.text
+            assert research.json()['mode']=='references_only'
+            assert research.json()['sources']==[]
         vectors = Vectors(settings)
         vectors.upsert([{'id':'smoke', 'url':'https://www.bankofengland.co.uk/', 'version':'test'}], [[1.,0.,0.]])
         assert 'smoke' in vectors.search([1.,0.,0.])

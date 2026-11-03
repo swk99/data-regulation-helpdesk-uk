@@ -33,6 +33,12 @@ class Agent:
 
     async def answer(self, question, live=False):
         clock = clock_context()
+        if re.fullmatch(r'\s*(?:hello|hi|hey|안녕(?:하세요)?)[!.?\s]*', question, flags=re.IGNORECASE):
+            return {**clock, 'freshness': 'not_applicable', 'mode': 'welcome',
+                    'message': 'Hello! Ask me a specific UK regulatory question, such as: What are the PRA expectations for model risk management? I will check permitted official sources and show supporting references or explain what I could not verify.',
+                    'claims': [], 'sources': [], 'official_sources': [], 'warnings': [],
+                    'trace': ['Greeting only. No regulatory documents were checked.'],
+                    'answered_at': now(), 'live_requested': live}
         trace = [f"Assessment date: {clock['as_of_date']} (Europe/London), read from the backend clock.", 'Searched the indexed official documents.']
         rows, warnings = await retrieve(question, self.store, self.models, self.vectors)
         if live:

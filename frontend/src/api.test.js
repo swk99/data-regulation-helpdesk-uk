@@ -35,3 +35,13 @@ test('404 explains how to open the local app',async()=>{
  globalThis.fetch=async()=>({ok:false,status:404,json:async()=>({})});
  try {await assert.rejects(request('https://example.com','','/api/status'),/Start Helpdesk.cmd/);}finally{globalThis.fetch=original;}
 });
+
+test('network failure diagnoses reachable app without resending a question',async()=>{
+ const original=globalThis.fetch;const calls=[];
+ globalThis.fetch=async(url,options)=>{calls.push([url,options.method]);if(url.endsWith('/api/time'))return{ok:true};throw new TypeError('Failed to fetch');};
+ try{await assert.rejects(request('http://127.0.0.1:8123','token','/api/chat',{question:'Hello.'}),/PC app is reachable/);assert.deepEqual(calls.map(c=>c[1]),['POST','GET']);}finally{globalThis.fetch=original;}
+});
+test('network failure gives actionable disconnected-app message',async()=>{
+ const original=globalThis.fetch;globalThis.fetch=async()=>{throw new TypeError('Failed to fetch')};
+ try{await assert.rejects(request('http://127.0.0.1:8123','token','/api/chat',{}),/Cannot reach the PC app/);}finally{globalThis.fetch=original;}
+});

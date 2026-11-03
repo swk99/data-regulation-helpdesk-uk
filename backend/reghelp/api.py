@@ -6,6 +6,7 @@ import secrets
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from .config import Settings
 from .storage import Store
@@ -19,7 +20,7 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 
 
 class Question(BaseModel):
-    question: str = Field(min_length=3, max_length=2000)
+    question: str = Field(min_length=1, max_length=2000)
     live: bool = False
 
 
@@ -54,6 +55,21 @@ def create_app(settings=None, *, local_origin=None, launch_ticket=None, ui_dir=N
     app = FastAPI(title='UK Regulation Helpdesk', version='0.1.0', lifespan=lifespan)
     if not local_origin:
         app.add_middleware(CORSMiddleware, allow_origins=s.origins, allow_methods=['GET', 'POST'], allow_headers=['Authorization', 'Content-Type'])
+
+    @app.exception_handler(Exception)
+    async def internal_error(request: Request, exc: Exception):
+        incident = secrets.token_hex(6)
+        logging.error('PC app error %s on %s %s', incident, request.method, request.url.path,
+                      exc_info=(type(exc), exc, exc.__traceback__))
+        headers = {'Cache-Control': 'no-store'}
+        permitted_origins = ([pages_origin] if pages_origin else []) if local_origin else s.origins
+        origin = request.headers.get('origin')
+        # ServerErrorMiddleware sits outside CORSMiddleware. Explicitly preserve
+        # the approved origin on unexpected errors so browsers can read the JSON.
+        if origin and origin in permitted_origins:
+            headers.update({'Access-Control-Allow-Origin': origin, 'Vary': 'Origin'})
+        return JSONResponse({'detail': f'The PC app encountered an internal error (support ID: {incident}). Check the app console for this ID and use the latest executable.',
+                             'error_id': incident}, status_code=500, headers=headers)
 
     async def auth(request: Request, authorization: str = Header(default='')):
         if local_origin:

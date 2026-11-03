@@ -11,6 +11,12 @@ Existing supported Ollama models are reused, preferring `qwen3.5:4b` when instal
 
 Every chat request attempts a bounded live check of permitted official sources, using the PC's current date in Europe/London. Keep Windows date/time synchronisation enabled. Internet access is required for current documents and initial downloads; model inference and storage stay on the PC. Current legal applicability is only reported as supported when evidence supports it. FCA general publications remain permission-gated, and Handbook access limitations remain visible. This is not exhaustive web search.
 
+## Fix for “Failed to fetch” when sending a question
+
+The first EXE release contained a SQL quoting error in candidate discovery. API startup and pairing could succeed, then research requests failed. Use the updated executable linked at the top of this page; close the old EXE before starting the replacement. Your index in AppData is retained. Refresh the GitHub Pages tab opened by the replacement.
+
+Regression coverage now includes the full chat/discovery/SQL/parsing/retrieval flow, not just startup. The packaged EXE self-test also sends a greeting and a research request with external services simulated as unavailable. Unexpected server errors now return readable JSON with a support ID rather than losing CORS headers. When a transport error prevents reading a response, the UI performs a read-only reachability check and does not automatically resend the question.
+
 ## Troubleshooting
 
 - **App already running, but this tab is disconnected:** you do not need to download it again. Use the GitHub tab opened by the EXE and refresh that tab once to load the connection fix. Other tabs in the same browser/profile can now request the authenticated session from that tab via **Retry connection**. If no linked tab remains, close the EXE console and reopen the EXE to get a fresh launch link. Ollama alone does not start the research backend.

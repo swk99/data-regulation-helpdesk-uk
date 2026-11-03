@@ -96,7 +96,7 @@ class Store:
 
     def candidates(self, question, source, limit):
         with self.connect() as db:
-            rows = [dict(r) for r in db.execute('SELECT c.* FROM candidates c LEFT JOIN versions v ON c.url=v.url AND v.active=1 WHERE c.source=? ORDER BY COALESCE(v.checked, '') ASC, c.discovered DESC LIMIT 10000', (source,))]
+            rows = [dict(r) for r in db.execute("SELECT c.* FROM candidates c LEFT JOIN versions v ON c.url=v.url AND v.active=1 WHERE c.source=? ORDER BY COALESCE(v.checked, '') ASC, c.discovered DESC LIMIT 10000", (source,))]
         words = set(re.findall(r'[a-z]{3,}', question.lower())) - {'what', 'which', 'does', 'about', 'must', 'should', 'the', 'and', 'for', 'are', 'with', 'from', 'that'}
         def score(row):
             return sum(w in (row['title'] + ' ' + row['url']).lower() for w in words)
